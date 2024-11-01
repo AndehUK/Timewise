@@ -3,15 +3,201 @@ generator client {
 }
 
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-model Post {
-    id        Int      @id @default(autoincrement())
-    name      String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+model Company {
+  id              String            @id @default(cuid())
+  name            String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  departments     Department[]
+  employees       Employee[]
+  holidays        Holiday[]
+  positions       Position[]
+  workingHours    CompanyWorkingHours[]
+  overtimeRules   CompanyOvertimeRule[]
+}
 
-    @@index([name])
+model CompanyWorkingHours {
+  id          String    @id @default(cuid())
+  company     Company   @relation(fields: [companyId], references: [id])
+  companyId   String
+  dayOfWeek   Int      // 0-6 for Sunday-Saturday
+  startTime   String   // Store as HH:mm
+  endTime     String   // Store as HH:mm
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([companyId, dayOfWeek])
+}
+
+model CompanyOvertimeRule {
+  id          String    @id @default(cuid())
+  company     Company   @relation(fields: [companyId], references: [id])
+  companyId   String
+  threshold   Float     // Hours worked before overtime kicks in
+  multiplier  Float     // Pay multiplier for overtime (e.g., 1.5)
+  type        OvertimeType
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Department {
+  id        String    @id @default(cuid())
+  name      String
+  company   Company   @relation(fields: [companyId], references: [id])
+  companyId String
+  employees Employee[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Position {
+  id          String    @id @default(cuid())
+  title       String
+  company     Company   @relation(fields: [companyId], references: [id])
+  companyId   String
+  employees   Employee[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Employee {
+  id           String       @id @default(cuid())
+  employeeId   String      @unique // Custom employee ID number
+  firstName    String
+  lastName     String
+  email        String      @unique
+  position     Position    @relation(fields: [positionId], references: [id])
+  positionId   String
+  department   Department  @relation(fields: [departmentId], references: [id])
+  departmentId String
+  company      Company     @relation(fields: [companyId], references: [id])
+  companyId    String
+  status       EmployeeStatus @default(ACTIVE)
+  timeEntries  TimeEntry[]
+  schedules    Schedule[]
+  leaves       Leave[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model TimeEntry {
+  id          String    @id @default(cuid())
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  employeeId  String
+  clockIn     DateTime
+  clockOut    DateTime?
+  status      ClockStatus @default(CLOCKED_IN)
+  latitude    Float?    // Location tracking
+  longitude   Float?    // Location tracking
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Schedule {
+  id              String    @id @default(cuid())
+  employee        Employee  @relation(fields: [employeeId], references: [id])
+  employeeId      String
+  startTime       DateTime
+  endTime         DateTime
+  recurring       Boolean   @default(false)
+  recurrenceRule  ScheduleRecurrenceRule?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model ScheduleRecurrenceRule {
+  id          String    @id @default(cuid())
+  schedule    Schedule  @relation(fields: [scheduleId], references: [id])
+  scheduleId  String    @unique
+  frequency   RecurrenceFrequency
+  interval    Int      // Every X days/weeks/months
+  daysOfWeek  ScheduleRecurrenceDays[]
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ScheduleRecurrenceDays {
+  id                      String                @id @default(cuid())
+  scheduleRecurrenceRule  ScheduleRecurrenceRule @relation(fields: [ruleId], references: [id])
+  ruleId                  String
+  dayOfWeek              Int    // 0-6 for Sunday-Saturday
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([ruleId, dayOfWeek])
+}
+
+model Leave {
+  id          String    @id @default(cuid())
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  employeeId  String
+  startDate   DateTime
+  endDate     DateTime
+  type        LeaveType
+  status      LeaveStatus @default(PENDING)
+  reason      String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Holiday {
+  id          String    @id @default(cuid())
+  company     Company   @relation(fields: [companyId], references: [id])
+  companyId   String
+  name        String
+  date        DateTime
+  recurring   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum ClockStatus {
+  CLOCKED_IN
+  CLOCKED_OUT
+  ON_BREAK
+}
+
+enum LeaveType {
+  VACATION
+  SICK
+  PERSONAL
+  MATERNITY
+  PATERNITY
+  UNPAID
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum OvertimeType {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+}
+
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
 }
